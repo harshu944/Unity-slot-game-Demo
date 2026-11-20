@@ -133,16 +133,9 @@ public class SlotMachineAutoSetup : MonoBehaviour
 
         int[] result = new int[3];
 
-        // 🐛 DEBUG: Hold W + SPIN = guaranteed win (remove before submission)
-        bool debugWin = Input.GetKey(KeyCode.W);
-
         for (int reel = 0; reel < 3; reel++)
         {
-            if (debugWin)
-                result[reel] = 0;
-            else
-                result[reel] = GetRandomSymbolIndex(reel, result);
-
+            result[reel] = GetRandomSymbolIndex(reel, result);
             StartCoroutine(AnimateReel(reel, result[reel]));
             yield return new WaitForSeconds(delayBetweenStops);
         }
@@ -166,9 +159,14 @@ public class SlotMachineAutoSetup : MonoBehaviour
             return currentResult[reel - 1];
         return Random.Range(0, symbols.Length);
     }
+
     /// <summary>
     /// Checks win conditions and applies the appropriate payout.
-    /// Handles Wild substitution: wild symbol matches any symbol.
+    /// Handles Wild substitution: wild matches any symbol.
+    /// </summary>
+    /// <summary>
+    /// Checks win conditions and applies the appropriate payout.
+    /// Strict rule: 3 identical OR 2 identical + 1 Wild.
     /// </summary>
     private void EvaluateResult(int[] result)
     {
@@ -179,35 +177,45 @@ public class SlotMachineAutoSetup : MonoBehaviour
         bool hasWin = false;
         int winSymbol = -1;
 
-        // Case 1: all three identical
+        bool hasWild = wildSymbolIndex >= 0 && wildSymbolIndex < symbols.Length;
+
+        // Case 1: All three are identical (includes 3 Wilds)
         if (a == b && b == c)
         {
             hasWin = true;
             winSymbol = a;
         }
-        // Case 2: two identical + one wild → treat as win
-        else if (wildSymbolIndex >= 0)
+        // Case 2: Two identical + One Wild
+        else if (hasWild)
         {
-            if ((a == b && c == wildSymbolIndex) ||
-                (b == c && a == wildSymbolIndex) ||
-                (a == c && b == wildSymbolIndex))
+            // Wild is at reel 1, and reel 2 & 3 match
+            if (a == wildSymbolIndex && b == c && b != wildSymbolIndex)
             {
                 hasWin = true;
-                // winning symbol is the non-wild one
-                winSymbol = (a == wildSymbolIndex) ? b : a;
+                winSymbol = b;
             }
-            // Two wilds + one normal → also a win with the normal symbol
-            else if (a == wildSymbolIndex && b == wildSymbolIndex) { hasWin = true; winSymbol = c; }
-            else if (b == wildSymbolIndex && c == wildSymbolIndex) { hasWin = true; winSymbol = a; }
-            else if (a == wildSymbolIndex && c == wildSymbolIndex) { hasWin = true; winSymbol = b; }
+            // Wild is at reel 2, and reel 1 & 3 match
+            else if (b == wildSymbolIndex && a == c && a != wildSymbolIndex)
+            {
+                hasWin = true;
+                winSymbol = a;
+            }
+            // Wild is at reel 3, and reel 1 & 2 match
+            else if (c == wildSymbolIndex && a == b && a != wildSymbolIndex)
+            {
+                hasWin = true;
+                winSymbol = a;
+            }
         }
 
-        if (hasWin)
+        // --- APPLY PAYOUT ---
+        if (hasWin && winSymbol >= 0)
         {
             // Multiplier: earlier symbols pay more
             int multiplier = winSymbol == 0 ? 10 :
                              winSymbol == 1 ? 5 :
                              winSymbol == 2 ? 4 : 3;
+
             int prize = bet * multiplier;
             coins += prize;
 
@@ -534,7 +542,6 @@ public class SlotMachineAutoSetup : MonoBehaviour
         // Add the new Input System module
         InputSystemUIInputModule inputModule =
             eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
-
 
         // ── SAVE ──
         EditorSceneManager.SaveScene(scene, scenePath);
